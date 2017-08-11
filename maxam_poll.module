@@ -1,0 +1,580 @@
+<?php
+function get_module_name()
+{
+    $module_name = basename(__FILE__, '.module');
+    return $module_name;
+}
+
+function maxam_poll_init()
+{
+    if(!isset($_COOKIE['client_id']))
+    {
+        $client_id = db_insert('poll_voter')
+            ->fields(array('client_ip'))
+            ->values(array($_SERVER['REMOTE_ADDR']))
+            ->execute();
+        setcookie('client_id', $client_id, time() +  60*60*24*365, '/');
+    }
+
+    if (arg(0) == 'admin')
+    {
+        $module_path = drupal_get_path('module', get_module_name());
+        drupal_add_js($module_path.'/js/script.js');
+        drupal_add_css($module_path.'/css/style.css','module', 'all', TRUE);
+    }
+
+}
+
+function maxam_poll_menu()
+{
+    return array(
+        'admin/config/services/maxam_poll' => array(
+            'title' => t('Poll configuration'),
+            'description' => t('Poll configuration'),
+            'page callback' => 'poll_config',
+            'access arguments' => array('administer maxam poll'),
+        ),
+        'admin/config/services/maxam_poll/create' => array(
+            'title' => t('Create new poll'),
+            'description' => t('Create new poll'),
+            'page callback' => 'drupal_get_form',
+            'page arguments' => array('maxam_poll_create'),
+            'access arguments' => array('administer maxam poll'),
+        ),
+        'admin/config/services/maxam_poll/polls' => array(
+            'title' => t('Polls list'),
+            'description' => 'All polls',
+            'page callback' => 'polls_list',
+            'access arguments' => array('administer maxam poll'),
+        ),
+        'admin/config/services/maxam_poll/poll/%' => array(
+            'title' => t('Poll edit'),
+            'description' => 'Poll edit',
+            'page callback' => 'drupal_get_form',
+            'page arguments' => array('maxam_poll_edit', 5),
+            'access arguments' => array('administer maxam poll'),
+        ),
+        'admin/config/services/maxam_poll/poll/%/delete' => array(
+            'title' => t('Poll delete'),
+            'description' => 'Poll delete',
+            'page callback' => 'poll_delete',
+            'page arguments' => array(5),
+            'access arguments' => array('administer maxam poll'),
+        ),
+        'poll/vote' => array(
+            'title' => t('Vote'),
+            'page callback' => 'poll_vote',
+            'access callback' => TRUE
+        ),
+        'get/next/poll' => array(
+            'title' => t('New poll'),
+            'page callback' => 'get_next_poll',
+            'access callback' => TRUE
+        )
+    );
+}
+
+function maxam_poll_create()
+{
+    $form = array();
+    $available_languages = language_list('enabled')[1];
+    $numb = 0;
+    foreach ($available_languages as $lang_key => $lang)
+    {
+        $form['question'][$lang_key] = array(
+            '#type' => 'textfield',
+            '#name' => 'question['.$lang_key.']',
+            '#title' => t("Question in @language_name", array("@language_name" => $lang->name))
+        );
+    }
+
+    $form['question'][$numb] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Choice @no', array('@no' => $numb+1)),
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+        '#attributes' => array('class' => array('poll_item'))
+    );
+    foreach ($available_languages as $lang_key => $lang)
+    {
+        $form['question'][$numb][$lang_key] = array(
+            '#type' => 'textfield',
+            '#name' => 'choice['.$numb.']['.$lang_key.']',
+            '#title' => t("@lang", array("@lang" => $lang_key)),
+            '#attributes' => array(
+                'lang' => $lang_key
+            )
+        );
+    }
+
+    $form['add_more'] = array(
+        '#markup' => '<div id="add_more_action" style="width: 40px;"><a class="btn btn-more">+</a></div>',
+    );
+    $form['save'] = array(
+        '#type' => 'submit',
+        '#value' => t('Save')
+    );
+
+    return $form;
+}
+
+function maxam_poll_create_submit($form, &$form_state)
+{
+    global $user;
+    $question = (!empty($form_state['input']))? $form_state['input']['question'] : array();
+    $question_choices = (!empty($form_state['input']))? $form_state['input']['choice'] : array();
+
+    $question_json = drupal_json_encode($question);
+    $pid = db_insert('poll_base')
+        ->fields(array('question', 'author_id'))
+        ->values(array($question_json, $user->uid))
+        ->execute();
+    $choices = db_insert('poll_choices')
+        ->fields(array('choice', 'poll_pid'));
+
+        foreach ($question_choices as $choice)
+        {
+            $choices->values(array(
+                drupal_json_encode($choice),
+                $pid
+            ));
+        }
+    $choices->execute();
+    drupal_set_message(t('New poll created'), 'status');
+}
+
+
+function maxam_poll_edit($maxam_poll_create, $form, $pid)
+{
+
+$sql_code = <<<SQL_CODE
+SELECT
+  pb.pid, pb.question, pb.created_at,
+  GROUP_CONCAT(concat(:bracket_start,'"choice":', pch.choice, ', "chid":', pch.chid, :bracket_end)) as list
+FROM poll_base pb
+  RIGHT JOIN poll_choices pch ON pch.poll_pid = pb.pid
+WHERE pb.pid = :poll_id
+GROUP BY pb.pid
+SQL_CODE;
+        $poll = db_query($sql_code, array(':bracket_start' => '{', ':bracket_end' => '}', ':poll_id' => $pid));
+        $res = $poll->fetchAssoc();
+        $question = drupal_json_decode($res['question']);
+        $list = json_decode("[" . $res['list'] . "]", TRUE);
+
+
+        $form = array();
+        $available_languages = language_list('enabled')[1];
+        $numb = 0;
+        foreach ($available_languages as $lang_key => $lang)
+        {
+            $form['question'][$lang_key] = array(
+                '#type' => 'textfield',
+                '#name' => 'question['. $lang_key .']',
+                '#title' => t("Question in @language_name", array("@language_name" => $lang->name)),
+                '#default_value' => (isset($question[$lang_key]))? $question[$lang_key] : ''
+            );
+        }
+
+        foreach ($list as $key => $value)
+        {
+            $form['question']['old'][$value['chid']] = array(
+                '#type' => 'fieldset',
+                '#title' => t('Choice @no', array('@no' => $numb+1)),
+                '#collapsible' => FALSE,
+                '#collapsed' => FALSE,
+                '#attributes' => array('class' => array('poll_item'))
+            );
+            foreach ($available_languages as $lang_key => $lang)
+            {
+                $form['question']['old'][$value['chid']][$lang_key] = array(
+                    '#type' => 'textfield',
+                    '#name' => 'choices[old][' .$value['chid']. ']['. $lang_key .']',
+                    '#title' => t("@lang", array("@lang" => $lang_key)),
+                    '#default_value' => (isset($value['choice'][$lang_key]))? $value['choice'][$lang_key] : '',
+                    '#attributes' => array(
+                        'lang' => $lang_key
+                    )
+                );
+            }
+            $numb++;
+        }
+
+        $form['add_more'] = array(
+            '#markup' => '<div id="add_more_action_edit_page" style="width: 40px;"><a class="btn btn-more">+</a></div>',
+        );
+
+        $form['pid'] = array(
+            '#type' => 'hidden',
+            '#value' => $pid
+        );
+
+        $form['save'] = array(
+            '#type' => 'submit',
+            '#value' => t('Save')
+        );
+
+    return $form;
+}
+
+function maxam_poll_edit_submit($form, &$form_state)
+{
+    global $user;
+    $pid = $form_state['input']['pid'];
+
+    $question = (!empty($form_state['input']))? $form_state['input']['question'] : array();
+
+    db_update('poll_base')
+        ->fields(array(
+            'question' => drupal_json_encode($question)
+        ))
+        ->condition('pid', $pid, '=')
+        ->execute();
+    $choices_old = (!empty($form_state['input']['choices']['old']))? $form_state['input']['choices']['old'] : array();
+    $choices_new = (!empty($form_state['input']['choices']['new']))? $form_state['input']['choices']['new'] : array();
+
+    $poll_choices_table = 'poll_choices';
+
+
+    if (!empty($choices_old))
+    {
+        $choice_keys_from_form = array_keys($choices_old);
+        $all_choices_in_db = db_select($poll_choices_table, 't')
+            ->fields('t',array('chid'))
+            ->condition('poll_pid', $pid, '=')
+            ->execute()
+            ->fetchAllKeyed(0, 0);
+
+
+        foreach ($all_choices_in_db as $key => $val)
+        {
+            if (!in_array($key, $choice_keys_from_form))
+            {
+                db_delete($poll_choices_table)
+                    ->condition('chid', $key, '=')
+                    ->condition('poll_pid', $pid, '=')
+                    ->execute();
+            }
+        }
+
+        foreach ($choices_old as $chid => $choice)
+        {
+            db_update($poll_choices_table)
+                ->fields(array(
+                    'choice' => drupal_json_encode($choice)
+                ))
+                ->condition('poll_pid', $pid,'=')
+                ->condition('chid', $chid,'=')
+                ->execute();
+        }
+
+    }
+
+    if (!empty($choices_new))
+    {
+        $new_poll_choices = db_insert($poll_choices_table)
+            ->fields(array('choice', 'poll_pid'));
+        foreach ($choices_new as $choice)
+        {
+            $new_poll_choices->values(array(
+               drupal_json_encode($choice),
+                $pid
+            ));
+        }
+        $new_poll_choices->execute();
+    }
+
+    header('Location: /admin/config/services/maxam_poll/polls');
+    exit();
+}
+
+function poll_delete($pid)
+{
+    if (isset($_GET['yes']))
+    {
+        db_delete('poll_base')
+            ->condition('pid', $pid)
+            ->execute();
+        header('Location: /admin/config/services/maxam_poll/polls');
+
+    }
+    return '<button><a href="?yes" class="btn">'. t('Yes, I\'m sure'). '</a></button>';
+}
+
+/**
+ * Implements hook_theme().
+ */
+function maxam_poll_theme($existing, $type, $theme, $path)
+{
+    return array(
+        'polls_list' => array(
+            'template' => 'inc/polls',
+            'variables' => array('polls_list' => NULL)
+        ),
+        'poll_configuration' => array(
+            'template' => 'inc/poll_configs',
+        ),
+        'poll_block_template' => array(
+            'template' => 'inc/poll_block',
+            'variables' => array('poll' => NULL)
+        ),
+        'get_next_poll' => array(
+            'template' => 'inc/poll_block',
+            'variables' => array('poll' => NULL)
+        )
+    );
+}
+
+function get_next_poll()
+{
+    return theme('get_next_poll', array('poll' => get_random_poll()));
+}
+
+function polls_list()
+{
+    global $language;
+    $polls = db_query('SELECT  * FROM poll_base')->fetchAll();
+    $polls_list = array();
+    foreach ($polls as $poll)
+    {
+        $question = drupal_json_decode($poll->question);
+        $new_poll = array(
+            'pid' => $poll->pid,
+            'question' => $question[$language->language],
+            'created' => $poll->created_at
+        );
+        array_push($polls_list, $new_poll);
+    }
+    return theme('polls_list', array('polls_list' => $polls_list));
+}
+
+/**
+ * Implements hook_permission().
+ */
+function maxam_poll_permission()
+{
+    return array(
+        'administer maxam poll' => array(
+            'title' => t('Administrate maxam polls'),
+            'description' => t('Access to configure and administrate polls')
+        )
+    );
+}
+
+function poll_config()
+{
+    return theme('poll_configuration');
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function maxam_poll_block_info()
+{
+    $blocks = array();
+    $blocks['poll'] = array(
+        'info' => t('Poll maxam block')
+    );
+    return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function maxam_poll_block_view($delta = '')
+{
+    $block = array();
+    switch ($delta):
+        case 'poll':
+            $block['content'] = theme('poll_block_template', array('poll' => get_random_poll()));
+        break;
+    endswitch;
+
+    return $block;
+}
+
+function get_maxam_poll_block()
+{
+    $block = block_load(get_module_name(),  'poll');
+    $block_rendered = _block_get_renderable_array(_block_render_blocks(array($block)));
+    return drupal_render($block_rendered);
+}
+
+function get_poll_answers($poll_id)
+{
+
+$poll_answers_sql_code = <<<SQL_CODE
+SELECT pch.choice as `choice`, pch.chid as `chid`, count(pchr.rate_id) as `count` FROM poll_choices pch 
+LEFT JOIN poll_choices_rate pchr ON pch.chid = pchr.chid 
+WHERE pch.poll_pid = :pid GROUP BY pch.chid
+SQL_CODE;
+
+    $poll_answers = db_query($poll_answers_sql_code, array(':pid' => $poll_id))->fetchAll();
+    return $poll_answers;
+}
+
+function get_client_voted_poll($pid)
+{
+
+$client_ip = $_SERVER['REMOTE_ADDR'];
+$client_id = $_COOKIE['client_id'];
+
+$voted_sql_code = <<<SQL_CODE
+SELECT * FROM poll_choices_rate pchr
+INNER JOIN poll_voter pv ON pchr.voter = pv.client_id
+INNER JOIN poll_choices pch ON pchr.chid = pch.chid
+WHERE pchr.voter = :client_id AND pv.client_ip = :client_ip AND pch.poll_pid = :pid
+SQL_CODE;
+
+    $voted = db_query($voted_sql_code,
+        array(
+            ':client_id' => $client_id,
+            ':client_ip' => $client_ip,
+            ':pid' => $pid
+        ))->fetchAssoc();
+    return $voted;
+}
+
+function get_poll_total_answers_count($answers)
+{
+    $total_vote = 0;
+    foreach ($answers as $answer)
+    {
+        $total_vote += $answer->count;
+    }
+    return $total_vote;
+}
+
+
+function generate_html_poll_bar($answers, $total_vote_count)
+{
+    global $language;
+        $html = '<div class="poll_statistic">';
+            foreach ($answers as $answer):
+            $choice_total_percent = ($total_vote_count > 0)? ($answer->count/$total_vote_count) * 100 : 0;
+            $choice_name = drupal_json_decode($answer->choice)[$language->language];
+                $html .= '<div class="poll_choice">';
+                    $html .= '<label for="choice_'.$answer->chid.'">';
+                        $html .= '<span>';
+                            $html .= $choice_name;
+                        $html .= '</span>';
+                        $html .= '<span>';
+                            $html .= $choice_total_percent. '%';
+                        $html .= '</span>';
+                        $html .= '<span>';
+                            $html .= '('.t("@count vote", array("@count" => $answer->count)).')';
+                        $html .= '</span>';
+                    $html .= '</label>';
+                    $html .= '<input disabled type="range" value="'.$choice_total_percent.'" id="choice_'.$answer->chid.'" max="100">';
+                $html .= '</div>';
+            endforeach;
+        $html .= '</div>';
+        $html .= '<a class="btn" id="poll_reset_vote">'.t('Reset Vote').'</a>';
+        $html .= '<a class="btn"  href="/'.$language->language.'/get/next/poll" id="poll_new_vote">'.t('Next poll').'</a>';
+    return $html;
+}
+
+function get_random_poll()
+{
+global $language;
+
+$query = <<<SQL_CODE
+SELECT
+  pb.pid, pb.question, pb.created_at,
+  GROUP_CONCAT(concat(:bracket_start,'"choice":', pch.choice, ', "chid":', pch.chid, :bracket_end)) as list
+FROM poll_base pb
+  RIGHT JOIN poll_choices pch ON pch.poll_pid = pb.pid
+GROUP BY pb.pid
+ORDER BY rand() LIMIT 1
+SQL_CODE;
+
+    $result = db_query($query, array(
+        ':bracket_start' => '{',
+        ':bracket_end' => '}'
+    ))->fetchAssoc();
+
+    $question_array = drupal_json_decode($result['question']);
+    $choices_array = drupal_json_decode('['.$result['list'].']');
+
+    $poll = array();
+
+    $poll['question'] = $question_array[$language->language];
+    $poll['pid'] = $result['pid'];
+
+
+    $poll['voted'] = get_client_voted_poll($poll['pid']);
+
+    $poll_answers = get_poll_answers($poll['pid']);
+
+    $poll['answers'] = $poll_answers;
+    $poll['total_vote'] = get_poll_total_answers_count($poll_answers);
+    foreach ($choices_array as $choice)
+    {
+        $poll['choices'][$choice['chid']] = $choice['choice'][$language->language];
+    }
+
+    return (object)$poll;
+}
+
+/**
+ *
+ */
+function poll_vote()
+{
+    $message = array();
+    if ($_SERVER['REQUEST_METHOD'] == 'POST')
+    {
+        if(isset($_REQUEST['choice']) && isset($_COOKIE['client_id']))
+        {
+            $table = 'poll_choices_rate';
+
+            $choice = (int)$_REQUEST['choice'];
+            $pid = (int)$_REQUEST['pid'];
+            $client_id = (int)$_COOKIE['client_id'];
+
+$voted_poll_code = <<<SQL_CODE
+SELECT * FROM poll_choices_rate pchr 
+INNER JOIN poll_choices pch ON pchr.chid = pch.chid 
+WHERE pch.poll_pid = :pid AND pchr.voter = :client_id
+SQL_CODE;
+
+            $result = db_query($voted_poll_code, array(':pid' => $pid, ':client_id' => $client_id))->fetchAssoc();
+
+            if(!empty($result))
+            {
+                db_update($table)->fields(array('chid' => $choice))
+                    ->condition('voter', $client_id)
+                    ->condition('chid', $result['chid'])
+                    ->execute();
+            }
+            else
+            {
+                db_insert($table)
+                    ->fields(array(
+                        'chid',
+                        'voter'
+                    ))
+                    ->values(array(
+                        $choice,
+                        $client_id
+                    ))
+                    ->execute();
+            }
+            $poll_answers = get_poll_answers($pid);
+
+            $response_html = generate_html_poll_bar($poll_answers, get_poll_total_answers_count($poll_answers));
+            $message['message'] = $response_html;
+            $message['status'] = 'success';
+        }
+        else
+        {
+            $message['status'] = 'error';
+            $message['message'] = t('Not validated');
+        }
+    }
+    else
+    {
+        $message['status'] = 'error';
+        $message['message'] = t('Not allowed method type');
+    }
+    drupal_json_output($message);
+}

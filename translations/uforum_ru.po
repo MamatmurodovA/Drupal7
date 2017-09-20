@@ -1,0 +1,2 @@
+msgid "Anwser"
+msgstr "Ответить"

@@ -1,0 +1,8 @@
+name = UForum
+package = Custom modules
+version = VERSION
+core = 7.x
+
+dependencies[] = node
+dependencies[] = entity
+dependencies[] = block

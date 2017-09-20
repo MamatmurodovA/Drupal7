@@ -1,0 +1,214 @@
+<?php
+global $user;
+
+define('UFORUM_PATH', drupal_get_path('module', basename(__DIR__)));
+define('UFORUM_SRC_PATH', UFORUM_PATH. '/src');
+
+define('UFORUM_INC_PATH', __DIR__.'/tpl/inc/');
+
+define('UFORUM_FORUM_USER_ROLE_NAME', 'forum user');
+//define('UFORUM_FORUM_USER_ROLE_ID', user_role_load_by_name(UFORUM_FORUM_USER_ROLE_NAME)->rid);
+define('UFORUM_FORUM_USER_ROLE_ID', '5');
+
+define('UFORUM_FORUM_CATEGORY_TAXONOMY_NAME', 'forums');
+
+
+define('UFORUM_FORUM_CATEGORY_TAXONOMY_VID', taxonomy_vocabulary_machine_name_load(UFORUM_FORUM_CATEGORY_TAXONOMY_NAME)->vid);
+define('UFORUM_FORUM_CONTENT_TYPE_NAME', 'forum_topic');
+define('UFORUM_FORUM_CONTENT_TYPE_CATEGORY_FIELD_NAME', 'field_forum_sections');
+define('UFORUM_FORUM_CONTENT_TYPE_TOPIC_DESCRIPTION_FIELD_NAME', 'body');
+define('UFORUM_USER_DEFAULT_PICTURE', '/'.UFORUM_SRC_PATH . '/img/user.svg');
+
+define('UFORUM_THEME_NAME', 'mineconomy');
+define('UFORUM_THEME_LOGO', theme_get_setting('logo', UFORUM_THEME_NAME));
+define('UFORUM_SITE_NAME', variable_get('site_name'));
+
+
+function is_admin()
+{
+    global $user;
+
+    if (in_array('administrator', $user->roles) || in_array('moderator', $user->roles)):
+        return true;
+    else:
+        return false;
+    endif;
+}
+
+function reverse_number($number)
+{
+
+    /* Typecast the number into string. */
+
+    $snum = (string) $number;
+
+    /* Reverse the string. */
+
+    $revstr = strrev($snum);
+
+    /* Typecast string into int. */
+
+    $reverse = (int) $revstr;
+
+    return $reverse;
+}
+
+
+/**
+ * Implements hook_menu().
+ */
+function uforum_menu()
+{
+    return array(
+        'forum' => array(
+            'page callback' => 'main_controller',
+            'access callback' => TRUE,
+            'file' => 'tpl/inc/functions.inc'
+        )
+    );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function uforum_theme($existing, $type, $theme, $path)
+{
+    return array(
+        'main_html' => array(
+            'template' => 'tpl/views/main_html'
+        ),
+        'header' => array(
+            'template' => 'tpl/block/header'
+        ),
+        'content' => array(
+            'template' => 'tpl/block/content'
+        ),
+        'footer' => array(
+            'template' => 'tpl/block/footer'
+        ),
+        'auth' => array(
+            'template' => 'tpl/views/auth'
+        ),
+        'register' => array(
+            'template' => 'tpl/views/register'
+        ),
+        'main_page' => array(
+            'template' => 'tpl/views/main_page'
+        ),
+        'account' => array(
+            'template' => 'tpl/views/account'
+        ),
+        'account_edit' => array(
+            'template' => 'tpl/views/account_edit'
+        ),
+        'ask_question' => array(
+            'template' => 'tpl/views/ask_question'
+        ),
+        'forum_section' => array(
+            'template' => 'tpl/views/forum_section'
+        ),
+        'forum_topic_tpl' => array(
+            'template' => 'tpl/views/forum_topic'
+        ),
+        'topic_comment_save' => array(
+            'template' => 'tpl/views/topic_comment_save'
+        ),
+        'forum_members' => array(
+            'template' => 'tpl/views/forum_members'
+        ),
+        'forum_member' => array(
+            'template' => 'tpl/views/forum_member'
+        ),
+        'forum_member_topics' => array(
+            'template' => 'tpl/views/forum_member_topics'
+        ),
+        'forum_terms' => array(
+            'template' => 'tpl/views/forum_terms'
+        ),
+        'forum_topic_edit' => array(
+            'template' => 'tpl/views/forum_topic_edit'
+        ),
+        'forum_topic_delete' => array(
+            'template' => 'tpl/views/forum_topic_delete'
+        ),
+        'forum_message_edit' => array(
+            'template' => 'tpl/views/forum_message_edit'
+        ),
+        'forum_message_delete' => array(
+            'template' => 'tpl/views/forum_message_delete'
+        )
+    );
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function uforum_user_update(&$edit, $account, $category)
+{
+    if (is_admin())
+    {
+        if ($edit['status'] == 1 && $account->login == 0)
+        {
+
+            $site_name =  variable_get('site_name', 'Drupal');
+            $site_email =  variable_get('site_mail', 'Drupal');
+
+            $email = $edit['mail'];
+
+
+            $path_name = t('Sign In');
+            $path = $_SERVER['HTTP_HOST'] .url('forum/auth');
+            $message = t("Hi, @account_name ! Your account has been activated. You may login.", array(
+                "@account_name" => $account->name
+            ));
+            $message = <<<HTML
+<html>
+<body>
+<div>
+$message
+</div>
+<div style="padding: 10px;">
+    <a style="padding: 10px 12px; border-radius: 3px; text-decoration: none; background: #0085c8;color: #fff"  href="$path">
+        $path_name
+    </a>
+</div>
+
+</body>
+</html>
+HTML;
+
+
+            $path = libraries_get_path('PHPMailer-master');
+            require $path . '/class.phpmailer.php';
+
+            $mail = new PHPMailer;
+
+            $mail->CharSet = 'UTF-8';
+
+            $mail->setFrom($site_email, $site_name);
+            $mail->addAddress($email);
+            $mail->addReplyTo($site_email, $site_name);
+            if (isset($attachment) && !empty($attachment))
+            {
+                $mail->addAttachment($attachment);
+            }
+            $mail->isHTML(true);
+
+            $mail->Subject = t('Account activation');
+            $mail->Body    = $message;
+
+            if(!$mail->send()) {
+                drupal_set_message(t('Message could not be sent.'), 'warning');
+                drupal_set_message('Mailer Error: ' . $mail->ErrorInfo, 'warning');
+            }
+            else
+            {
+                drupal_set_message(t('Message was sent.'));
+            }
+            $redirect_path = $_SERVER['HTTP_HOST'] .url('admin/people');
+            header("Location: $redirect_path");
+            exit(0);
+        }
+    }
+
+}

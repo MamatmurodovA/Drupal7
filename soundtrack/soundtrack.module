@@ -1,0 +1,25 @@
+<?php
+define('SOUNDTRACK_PATH', drupal_get_path('module','soundtrack'));
+function soundtrack_theme(){
+    return array(
+        'soundtrack_template' => array(
+            'template' => 'soundtrack-template'
+        )
+    );
+}
+function soundtrack_block_info(){
+    $blocks = array();
+    $blocks['soundtrack'] = array(
+        'info' => t('SoundTrack is extra functionality for sites.')
+    );
+    return $blocks;
+}
+
+function soundtrack_block_view($delta=''){
+    $block = array();
+    switch ($delta):
+        case 'soundtrack':
+            $block['content'] = theme('soundtrack_template');
+    endswitch;
+    return $block;
+}

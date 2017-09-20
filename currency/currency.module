@@ -1,0 +1,82 @@
+<?php
+function get_currency_rates($date=NULL){
+    if ($date == NULL){
+            $date = date('Y-m-d');
+    }
+	$sql_query = "SELECT
+  term_data.name ,
+  val.field_val_value as `rate`,
+  val_buy.field_val_buy_value as `buying`,
+  val_sell.field_val_sell_value as `selling`
+FROM node n
+INNER JOIN field_data_field_val val ON val.entity_id = n.nid
+INNER JOIN field_data_field_currency fcurrency ON fcurrency.entity_id = n.nid
+INNER JOIN taxonomy_term_data term_data ON term_data.tid = fcurrency.field_currency_tid
+INNER JOIN field_data_field_val_sell val_sell ON val_sell.entity_id = n.nid
+INNER JOIN field_data_field_val_buy val_buy ON val_buy.entity_id = n.nid
+WHERE n.type = 'currency' AND (n.created <> unix_timestamp(:date_time)) AND term_data.name IN (SELECT term.name
+                                                 FROM taxonomy_term_data term
+                                                   INNER JOIN taxonomy_vocabulary tax_vac ON tax_vac.vid = term.vid
+                                                 WHERE tax_vac.machine_name = 'currency') ORDER BY n.created DESC LIMIT 5";
+	$result = db_query($sql_query, array('date_time' => $date))->fetchAll(PDO::FETCH_ASSOC);
+	return $result;
+}
+function currency_permission(){
+	return array(
+		'access currency content' => array(
+			'title' => t('Currency archive permission')
+		)
+	);
+}
+
+function currency_menu(){
+	return array(
+		'currency/archive' => array(
+			'title' => t('Currency archive'),
+			'access arguments' => array('access currency content'),
+			'page callback' => 'currency_archive',
+		)
+	);
+}
+
+function currency_archive(){
+	return theme('currency_archive_page', array('myvar' => 5));
+}
+
+function currency_theme(){
+	return array(
+		'currency_archive_page' => array(
+			'variables' => array('myvar' => NULL),
+			'template'  => 'tpl/currency_archive_page'
+		),
+		'currency_rate_block'   => array(
+			'template'  => 'tpl/currency_rate_block'
+		)
+	);
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function currency_block_info() {
+	$blocks = array();
+	$blocks['currency_rate_block'] = array(
+		'info' => t('Currency rate block')
+	);
+	return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function currency_block_view($delta = '') {
+	$block = array();
+	switch ($delta):
+		case 'currency_rate_block':
+			$block['content'] = theme('currency_rate_block');
+		break;
+	endswitch;
+
+	return $block;
+}

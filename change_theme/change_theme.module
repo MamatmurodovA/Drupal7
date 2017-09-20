@@ -1,0 +1,42 @@
+<?php
+define('DESKTOP_THEME', 'turkiston');
+define('MOBILE_THEME', DESKTOP_THEME.'_mobile');
+
+function change_theme_menu(){
+	$items = array();
+
+	$items['theme/change'] = array(
+		'title' => t('Theme change'),
+		'page callback' => 'theme_change_method',
+    	'access arguments' => array('access content'),
+	);
+	return $items;
+}
+function theme_change_method(){
+	$current_theme = (isset($_COOKIE['client_theme']))? $_COOKIE['client_theme'] : variable_get('theme_default');
+	if($current_theme == MOBILE_THEME){
+		$default_theme = DESKTOP_THEME;
+	}else{
+		$default_theme = MOBILE_THEME;
+	}
+	setcookie("client_theme", $default_theme, time() + 3600 * 24 * 30, "/");
+	header("Location: /");
+}	
+
+function change_theme_link(){
+	$current_theme = (isset($_COOKIE['client_theme']))? $_COOKIE['client_theme'] : variable_get('theme_default');
+	$theme_change_link = 'theme/change';
+
+	if($current_theme == DESKTOP_THEME){
+		$text = 'Mobile version';
+                $class = 'mobile_version';
+	}else{
+		$text = 'Full version';
+                $class = 'full-version';
+	}
+	return l(t($text), $theme_change_link, array('attributes' => array('class' => array($class))));
+}
+
+function change_theme_custom_theme() {
+    return (isset($_COOKIE['client_theme']))? $_COOKIE['client_theme'] : variable_get('theme_default');
+}

@@ -1,0 +1,8 @@
+name = Subscribe
+description = Provides a subscribtion and unsubscribtion for users on left sidebar.
+core = 7.x
+package = Custom
+dependencies[] = node
+dependencies[] = system
+files[] = "templates/block.inc"
+configure = admin/config/content/user_subscribe

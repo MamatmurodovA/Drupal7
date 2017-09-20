@@ -1,0 +1,7 @@
+name = Deposits
+description = Deposits calculation
+core = 7.x
+package = Custom modules
+dependencies[] = node
+dependencies[] = taxonomy
+

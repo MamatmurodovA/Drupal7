@@ -1,0 +1,6 @@
+name=Branches, mini-banks and offices
+description=Branches, mini-banks and offices
+core = 7.x
+package = Custom modules
+dependencies[] = node
+dependencies[] = pathauto

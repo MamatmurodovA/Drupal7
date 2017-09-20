@@ -1,0 +1,4 @@
+name = Custom change theme module
+description = "Switch to mobile theme"
+core = 7.x
+package = Custom modules

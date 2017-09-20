@@ -1,0 +1,58 @@
+<?php
+$path = drupal_get_path('module', 'branches');
+drupal_add_css($path.'/css/gmap.css', 'file');
+function branches_menu(){
+    return array(
+        'branches' => array(
+            'title' => t('Branches, mini-banks and offices'),
+            'page callback' => 'branches_page',
+            'access callback' => TRUE,
+            'access arguments' => array('access branches')
+        ),
+        'branch/%/%' => array(
+            'page callback' => 'branche_node',
+            'access callback' => TRUE,
+            'access arguments' => array('access branches'),
+            'page arguments' => array(1, 2)
+        )
+    );
+}
+
+function branches_permission(){
+    return array(
+        'access branches' => array(
+            'title' => t('Get access to branches page')
+        )
+    );
+}
+function branches_theme(){
+    return array(
+      'branches_page' => array(
+          'template' => 'branches'
+      ),
+      'branche_node_page' => array(
+          'template' => 'node--branches'
+      )
+    );
+}
+function branches_page(){
+    module_load_include('inc', 'pathauto', 'pathauto');
+    global $language;
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'branches')
+        ->propertyCondition('status', NODE_PUBLISHED)
+	    ->propertyCondition('language', $language->language, '=');
+
+    $result = $query->execute();
+    $branches_node_nids = array_keys($result['node']);
+    $branches = node_load_multiple($branches_node_nids); 
+    
+    return  theme('branches_page', array('branches' => $branches, 'result' => $result));
+}
+
+function branche_node($title_alias, $nid){
+    $node = node_load($nid);
+
+    return theme('branche_node_page', array('node' => $node));
+}

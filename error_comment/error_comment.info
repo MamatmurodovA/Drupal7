@@ -1,0 +1,14 @@
+name = Error comment
+description = "Sending error reports by users"
+package = Custom extension
+core = 7.x
+
+dependencies[] = system (>=7.9)
+
+version = "7.x-2.0-beta2"
+core = "7.x"
+project = "error_comment"
+datestamp = "1445272978"
+
+scripts[] = js/cmt_script.js
+stylesheets[all][] = css/cmt_script.css

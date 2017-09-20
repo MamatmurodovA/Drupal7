@@ -1,0 +1,35 @@
+<?php
+
+
+function opendata_menu()
+{
+	return array(
+		'open/data' => array(
+			'title' => t('Open data'),
+		  	'page callback' => 'get_organization_open_data',
+		  	'access callback' => TRUE
+		)
+	);
+}
+
+function get_organization_open_data()
+{	$remote_server = "https://data.gov.uz/";
+	$access_key = "1868de24f70c3e27b6a8c4b1070aa6eb";
+	$organization_id = 6;
+	$language = $GLOBALS['language']->language;
+
+	$content_url = $remote_server.$language."/api/v1/json/organization/".$organization_id."/dataset?access_key=".$access_key;
+	$data = file_get_contents($content_url);
+
+	$result = json_decode($data);
+	return theme('open_data_tpl', array('lang' => $language, 'result' => $result, 'remote_server' => $remote_server));
+}
+
+function opendata_theme()
+{
+	return array(
+		'open_data_tpl' => array(
+			'template' => 'open-data'
+		)
+	);
+}

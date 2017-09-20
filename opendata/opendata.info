@@ -1,0 +1,4 @@
+name = Open data from data.gov.uz
+description = "Mineconomy open data"
+core = 7.x
+package = Custom modules

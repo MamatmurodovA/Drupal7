@@ -1,0 +1,136 @@
+<?php
+
+function _send_message($to, $from, $subject, $data){
+    $module = 'subscribe';
+    $key = 'user_subscribe';
+    $language = language_default();
+    $params = array();
+    $from = NULL;
+    $send = FALSE;
+    $message = drupal_mail($module, $key, $to, $language, $params, $from, $send);
+    $message['subject'] = $subject;
+    $message['body'] = array();
+    $message['body']['html'] = drupal_wrap_mail($data);
+    $system = drupal_mail_system($module, $key);
+    $message = $system->format($message);
+    return $system->mail($message);
+}
+
+function subscribe_menu(){
+	return array(
+		'subscribe/info' => array(
+			'title'           => t('Confirmation page'),
+			'page callback'   => 'get_subscribe_info',
+			'access callback' => TRUE
+		)
+	);
+}
+
+function subscribe_form($form, &$form_state){
+	return array(
+		'email' => array(
+			'#type' => 'textfield',
+			'#maxlength' => 30,
+			'#attributes' => array(
+				'placeholder' => t('Enter your email'),
+				'class' => array('form-control')
+			)
+		),
+		'subscribe' => array(
+			'#type' => 'submit',
+			'#value' => t('Subscribe'),
+			'#name'  => 'op',
+			'#attributes' => array(
+				'class' => array('form-control', 'btn')
+			)
+		),
+		'unsubscribe' => array(
+			'#type' => 'submit',
+			'#value' => t('Unsubscribe'),
+			'#name'  => 'op',
+			'#attributes' => array(
+				'class' => array('form-control', 'btn')
+			)
+		)
+	);
+}
+
+function subscribe_form_submit($form, &$form_state){
+	$mail   = $form_state['input']['email'];
+	$action = strtolower($form_state['input']['op']);
+	if ($action == 'unsubscribe'){
+		db_delete('subscribe')->condition('email', $mail)->execute();
+		$url = url('subscribe/info').'?unsubscribed';
+		header("Location: {$url}");
+		exit(0);
+	}else{
+		$res = db_select('subscribe', 's')
+				->fields('s')
+				->condition('s.email', $mail, '=')
+				->execute();
+		$cnt = $res->rowCount();
+		if ($cnt == 0){
+			$sub_id = db_insert('subscribe')
+				->fields(array(
+					'sub_id' => NULL,
+					'email'   => $mail
+				))
+				->execute();
+			$url = url('subscribe/info').'?subscribed';
+			header("Location: {$url}");
+			exit(0);
+		}
+	}
+}
+function subscribe_block_info(){
+	return array(
+		'subscribe_block' => array(
+			'info' => t('Subscribe block')
+		)
+	);
+}
+
+function subscribe_block_view($delta=''){
+	$block = array();
+	switch ($delta){
+		case 'subscribe_block':
+			$block['content'] = drupal_get_form('subscribe_form');
+			break;
+	};
+	return $block;
+}
+
+function subscribe_node_insert($node){
+	if ($node->type == 'news'){
+		$site_email = variable_get('site_mail', '');
+
+		$link = 'http://'.$_SERVER['HTTP_HOST'].url('node/'.$node->nid);
+		
+		$mail_list = db_select('subscribe', 's')
+				->fields('s', array('email'))
+				->execute();
+
+		if ($mail_list->rowCount() != 0) {
+			$mails = '';
+			$i = 1;
+			foreach ($mail_list->fetchAll() as $mail){
+				$mails .= $mail->email;
+				$mails .= ($i != $mail_list->rowCount())? ',' : '';
+				$i++;
+			}
+			_send_message($mails, $site_email, $node->title, $link);
+		}
+
+	}
+}
+
+function get_subscribe_info(){
+	$message = '';
+	if (isset($_GET['unsubscribed'])){
+		$message .= t('You have unsubscribed');
+	}
+	if (isset($_GET['subscribed'])){
+		$message .= t('You have subscribed');
+	}
+	return $message;
+}

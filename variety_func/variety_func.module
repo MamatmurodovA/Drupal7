@@ -1,0 +1,53 @@
+<?php
+
+function variety_func_menu()
+{
+    return array(
+        'appeal/detail/%' => array(
+            'page callback' => 'appeal_detail_page',
+            'access callback' => TRUE
+        )
+    );
+}
+
+function appeal_detail_page()
+{
+    global $user;
+    $error_message = t('Not available this submission');
+    include(drupal_get_path('module', 'webform') .'/includes/webform.submissions.inc');
+
+    $sid = arg(2) or die($error_message);
+    $nid = 297;
+    $node = node_load($nid);
+    $email = NULL;
+    $format = "html";
+    $submission = webform_get_submission($nid, $sid);
+
+    $data = webform_submission_render($node, $submission, $email, $format);
+    if($submission->uid == $user->uid)
+    {
+        return render($data);
+    }else{
+        return $error_message;
+    }
+}
+
+
+function get_user_virtual_reception_results($user)
+{
+    $email = $user->mail;
+    $status_list_ = cut_string_with_comma_v_r(variable_get('status_list_v_r', ''));
+    $sql = "SELECT * FROM virtual_reception where email= :email";
+    $result = db_query($sql, array(":email" => $email));
+    $all_appeals_to_chairman = $result->fetchAll();
+    return theme('appeals_to_chairman', array('appeals' => $all_appeals_to_chairman, 'status_list' => $status_list_));
+}
+
+function variety_func_theme()
+{
+    return array(
+       'appeals_to_chairman' => array(
+           'template' => 'appeal_to_chairman_template'
+       )
+    );
+}

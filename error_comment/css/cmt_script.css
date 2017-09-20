@@ -1,0 +1,20 @@
+.content_err {
+    padding: 15px;
+}
+div#er_txt {
+    font-size: 14px;
+    padding: 4px;
+    margin: 0px;
+    display: block;
+}
+
+textarea.comment_txt {
+    display: block;
+    padding: 3px;
+    margin: 0px 1px 5px 1px;
+    width: 380px;
+    height: 64px;
+}
+#error_text .close {
+    margin: 4px 10px 0px 0px;
+}

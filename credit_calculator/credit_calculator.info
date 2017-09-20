@@ -1,0 +1,5 @@
+name = Credit calculator modules
+description = Credit calculator modules.
+core = 7.x
+package = Custom modules    
+dependencies[] = node

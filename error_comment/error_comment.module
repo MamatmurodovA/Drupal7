@@ -1,0 +1,53 @@
+<?php
+function error_comment_menu(){
+
+        $items = array();
+        $items['send/report'] = array(
+            'title' => 'Send report',
+            'page callback' => 'send_report',
+            'access callback' => TRUE,
+            'file' => 'inc/send_report.inc',
+        );
+        return $items;
+
+}
+
+function error_comment_page_build(&$page) {
+    if (!path_is_admin(current_path()) && $GLOBALS['theme']=='mineconomy') {
+        $ext = '<button type="button" class="btn btn-primary" id="error_textbtn" data-toggle="modal" data-target=".text_error" style="display:none;">';
+        $ext .= t('Small modal');
+        $ext .='</button>';
+        $ext .= '<div class="modal fade text_error" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel">';
+            $ext .= '<div class="modal-dialog modal-sm">';
+                $ext .= '<div class="modal-content" id="error_text">';
+                    $ext .= '<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>';
+                    $ext .= '<div class="content_err">';
+                    $ext .= '<span class="error_txt">';
+                        $ext .= t('Sending error messages');
+                    $ext .= '</span>';
+                    $ext .= '<span class="error_txt2">';
+                        $ext .= t('The text, which is an error:');
+                    $ext .= '</span>';
+                    $ext .= '<div id="er_txt"></div>';
+                        $ext .= '<div class="content">';
+                                $ext .= '<span>';
+                                    $ext .= t('Your comment for administrator:');
+                                $ext .= '</span>';
+                                $ext .= '<textarea class="comment_txt"></textarea>';
+                                $ext .= '<button class="btn btn-primary" id="send_comment">';
+                                $ext .= t('Send');
+                                $ext .= '</button>';
+                                $ext .= '<button type="button" class="btn btn-default" data-dismiss="modal">';
+                                    $ext .= t('Close');
+                                $ext .= '</button>';
+                        $ext .= '</div>';
+                    $ext .= '</div>';
+                $ext .= '</div>';
+            $ext .= '</div>';
+        $ext .= '</div>';
+        $page['page_bottom']['test'] = array(
+            '#weight' => 25,
+            '#markup' => $ext
+        );
+    }
+}

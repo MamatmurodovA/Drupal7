@@ -1,0 +1,5 @@
+name = Sound Track
+description = Custom Sound Track from datasite.uz.
+core = 7.x
+package = Custom modules
+dependencies[] = node
